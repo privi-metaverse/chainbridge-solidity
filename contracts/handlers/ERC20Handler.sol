@@ -78,9 +78,10 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         @param data Consists of: {resourceID}, {amount}, {lenRecipientAddress}, and {recipientAddress}
         all padded to 32 bytes.
         @notice Data passed into the function should be constructed as follows:
-        amount                      uint256     bytes   0 - 32
-        recipientAddress length     uint256     bytes  32 - 64
-        recipientAddress            bytes       bytes  64 - END
+        tokenAddress                address     bytes   0 - 32
+        amount                      uint256     bytes  32 - 64
+        recipientAddress length     uint256     bytes  64 - 96
+        recipientAddress            bytes       bytes  96 - END
         @dev Depending if the corresponding {tokenAddress} for the parsed {resourceID} is
         marked true in {_burnList}, deposited tokens will be burned, if not, they will be locked.
      */
@@ -92,14 +93,12 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         bytes   calldata data
     ) external override onlyBridge {
         bytes   memory recipientAddress;
+        address        tokenAddress;
         uint256        amount;
         uint256        lenRecipientAddress;
 
-        (amount, lenRecipientAddress) = abi.decode(data, (uint, uint));
-        recipientAddress = bytes(data[64:64 + lenRecipientAddress]);
-
-        address tokenAddress = _resourceIDToTokenContractAddress[resourceID];
-        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
+        (tokenAddress, amount, lenRecipientAddress) = abi.decode(data, (address, uint, uint));
+        recipientAddress = bytes(data[96:96 + lenRecipientAddress]);
 
         if (_burnList[tokenAddress]) {
             burnERC20(tokenAddress, depositer, amount);
@@ -123,26 +122,25 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         @param data Consists of {resourceID}, {amount}, {lenDestinationRecipientAddress},
         and {destinationRecipientAddress} all padded to 32 bytes.
         @notice Data passed into the function should be constructed as follows:
-        amount                                 uint256     bytes  0 - 32
-        destinationRecipientAddress length     uint256     bytes  32 - 64
-        destinationRecipientAddress            bytes       bytes  64 - END
+        tokenAddress                           address     bytes  0 - 32
+        amount                                 uint256     bytes  32 - 64
+        destinationRecipientAddress length     uint256     bytes  64 - 96
+        destinationRecipientAddress            bytes       bytes  96 - END
      */
     function executeProposal(bytes32 resourceID, bytes calldata data) external override onlyBridge {
+        address       tokenAddress;
         uint256       amount;
         uint256       lenDestinationRecipientAddress;
         bytes  memory destinationRecipientAddress;
 
-        (amount, lenDestinationRecipientAddress) = abi.decode(data, (uint, uint));
-        destinationRecipientAddress = bytes(data[64:64 + lenDestinationRecipientAddress]);
+        (tokenAddress, amount, lenDestinationRecipientAddress) = abi.decode(data, (address, uint, uint));
+        destinationRecipientAddress = bytes(data[96:96 + lenDestinationRecipientAddress]);
 
         bytes20 recipientAddress;
-        address tokenAddress = _resourceIDToTokenContractAddress[resourceID];
 
         assembly {
             recipientAddress := mload(add(destinationRecipientAddress, 0x20))
         }
-
-        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
 
         if (_burnList[tokenAddress]) {
             mintERC20(tokenAddress, address(recipientAddress), amount);
